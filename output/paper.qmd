@@ -1,0 +1,191 @@
+---
+title: "WebScraping of List of Prime Ministers of Australia"
+subtitle: "STA302 Mini Essay 5"
+format: pdf
+editor: visual
+author: 
+  - Ping-Jen (Emily) Su
+thanks: "Code and data are available at: https://github.com/emisu36/WebScraping-Australia-PM"
+date: today
+date-format: long
+toc: true
+number-sections: true
+bibliography: references.bib
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+library(rvest)
+library(janitor)
+library(kableExtra)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(haven)
+```
+
+\newpage
+
+# Introduction
+
+WebScraping is performed on the Wikipedia page of "List of Prime Ministers of Australia" with the code from @tellingstories, and further analyzed.
+
+# Data
+Tools by @citeR, @tidyverse and @janitor is used to clean and analyze the data collected from Wikipedia
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+raw_data <-
+  read_html(
+    "https://en.wikipedia.org/wiki/List_of_prime_ministers_of_Australia"
+  )
+parse_data_selector_gadget <-
+  raw_data |>
+  html_element(".wikitable") |>
+  html_table()
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+parsed_data <-
+  parse_data_selector_gadget |> 
+  clean_names() |> 
+  rename(raw_text = name_birth_death_constituency) |> 
+  select(raw_text) |> 
+  filter(raw_text != "Name(Birth–Death)Constituency") |> 
+  distinct() 
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+initial_clean <-
+  parsed_data |>
+  separate(
+    raw_text, into = c("name", "not_name"), sep = "\\(", extra = "merge",
+  ) |> 
+  mutate(date = str_extract(not_name, "[[:digit:]]{4}–[[:digit:]]{4}"),
+         born = str_extract(not_name, "b.[[:space:]][[:digit:]]{4}")
+         ) |>
+  select(name, date, born)
+  
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+cleaned_data <-
+  initial_clean |>
+  separate(date, into = c("birth", "died"), 
+           sep = "–") |>   # PMs who have died have their birth and death years 
+  # separated by a hyphen, but we need to be careful with the hyphen as it seems 
+  # to be a slightly odd type of hyphen and we need to copy/paste it.
+  mutate(
+    born = str_remove_all(born, "b.[[:space:]]"),
+    birth = if_else(!is.na(born), born, birth)
+  ) |> # Alive PMs have slightly different format
+  select(-born) |>
+  rename(born = birth) |> 
+  mutate(across(c(born, died), as.integer)) |> 
+  mutate(Age_at_Death = died - born) |> 
+  distinct() # Some of the PMs had two goes at it.
+
+head(cleaned_data)
+```
+
+
+
+# Results
+
+The figure and table is generated with the help of @ggplot2, @kableextra, and @knitr.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+cleaned_data |>
+  head() |>
+  kable(
+    col.names = c("Prime Minister", "Birth year", "Death year", "Age at death")
+    )
+```
+
+\newpage
+
+```{r}
+#| label: fig-lifespan
+#| fig-cap: List of Prime Ministers of Australia LifeSpan
+#| echo: false
+#| warning: false
+#| message: false
+
+cleaned_data |>
+  mutate(
+    still_alive = if_else(is.na(died), "Yes", "No"),
+    died = if_else(is.na(died), as.integer(2023), died)
+  ) |>
+  mutate(name = as_factor(name)) |>
+  ggplot(
+    aes(x = born, xend = died, y = name, yend = name, color = still_alive)
+    ) +
+  geom_segment() +
+  labs(
+    x = "Year of birth", y = "Prime minister", color = "PM is currently alive"
+    ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "bottom")
+```
+
+
+
+# Discussion
+
+## Findings
+
+The data provides us with information on the years of birth and death of different Australian prime ministers. We can learn and analyze from the data and also from @fig-lifespan.
+
+Life Spans: By examining each Prime Minister's birth and death years (where known), we can determine how long each of them lived.This information allows us to understand the longevity of each leader and compare their life spans.
+
+Historical Timeline: We may construct a timeline of Australian Prime Ministers and comprehend the order of their leadership by looking at the years of birth and death. This aids in placing historical occurrences and political shifts in Australia in context.
+
+Comparison of Ages: In order to evaluate patterns in life expectancy throughout time, we might compare the ages of deceased prime ministers. This approach can shed light on how healthcare and living standards have improved throughout time.
+
+Current Leaders: We can see the present ages of the Prime Ministers who are still living. Understanding the age distribution of political leaders and their possible impact on current actions and policies is made easier with the use of this information.
+
+In general, the information offers insightful information about the characteristics and lifespans of Australian prime ministers, which advances knowledge of the country's political past and leadership.
+
+## Procedure
+
+As for the data source, Wikipedia is a popular resource for learning about a wide range of subjects, including public leaders like prime ministers. Australian prime minister data can be easily scraped and extracted using web scraping techniques, as the Wikipedia page on the subject provides the data in table form.
+
+The data is scraped using the library rvest. After the data has been extracted, I will clean it up by eliminating any extra characters and changing the data types as required. For instance, the age at death for deceased prime ministers is calculated by converting their birth and death years to numerical format. And therefore the figure can be generated successfully.
+
+## Conclusion
+
+Understanding the code and making the code work took longer than expected as the table of the Wikipedia pages do look different from one another. At the same time figuring what should be changed from the original code did take more time than planned. It became fun as everything starts to come together and you start to understand how every piece of code works. From easily searching up what packages every code belongs to implementing all the code and the different parsing techniques are all part of the learning process. Next time I would try graphs that look different or explore other ways to scrap wikipedia pages, such as scraping the second table on the page instead of the first one only. 
+
+
+\newpage
+
+
+# References
+
